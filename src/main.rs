@@ -1,13 +1,11 @@
-use tower_lsp::{
-    Client, LanguageServer,
-    lsp_types::{InitializeParams, InitializeResult},
-};
-
-pub struct Backend {
-    client: Client,
-}
+use gradle_analyzer::services::Backend;
+use tower_lsp::{LspService, Server};
 
 #[tokio::main]
 async fn main() {
-    println!("Hello World");
+    let stdin = tokio::io::stdin();
+    let stdout = tokio::io::stdout();
+    let (service, socket) = LspService::new(Backend::new);
+
+    Server::new(stdin, stdout, socket).serve(service).await;
 }

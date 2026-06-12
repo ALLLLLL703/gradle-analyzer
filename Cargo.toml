@@ -12,3 +12,5 @@ tower-lsp = "0.20.0"
 serde_json = { version = "1.0" }
 serde = { version = "1.0.228", features = ["std", "derive"] }
 thiserror = "2.0.18"
+anyhow = "1.0.102"
+toml = "1.1.2"
