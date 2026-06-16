@@ -14,3 +14,4 @@ serde = { version = "1.0.228", features = ["std", "derive"] }
 thiserror = "2.0.18"
 anyhow = "1.0.102"
 toml = "1.1.2"
+shellexpand = "3.1.2"
