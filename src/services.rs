@@ -3,30 +3,94 @@ pub mod handle_change;
 pub mod handle_close;
 pub mod handle_open;
 
-use crate::{
-    document::{DocumentSnapShot, DocumentStore},
-    services::diagnostics::DiagnosticsManager,
-};
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
+
 use tokio::sync::RwLock;
 use tower_lsp::{
-    Client, LanguageServer, LspService, Server,
+    Client, LanguageServer,
     lsp_types::{
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-        InitializeParams, InitializeResult, ServerCapabilities, TextDocumentSyncKind,
+        InitializeParams, InitializeResult, ServerCapabilities, TextDocumentSyncKind, Url,
     },
 };
+
+use crate::{
+    config::{default::default_runtime_config, manager::ConfigManager},
+    document::{DocumentSnapshot, DocumentStore},
+    i18n::LangHelper,
+};
+
 pub struct Backend {
     client: Client,
-    documents: Arc<RwLock<DocumentStore>>,
-    diagnostics: Arc<RwLock<DiagnosticsManager>>,
+    runtime: RuntimeServices,
+}
+
+#[derive(Clone)]
+pub struct RuntimeServices {
+    pub documents: DocumentService,
+    pub diagnostics: DiagnosticsService,
+    pub config: Arc<ConfigManager>,
+    pub lang: Arc<LangHelper>,
+}
+
+#[derive(Clone)]
+pub struct DocumentService {
+    store: Arc<RwLock<DocumentStore>>,
+}
+
+#[derive(Clone)]
+pub struct DiagnosticsService {
+    config: Arc<ConfigManager>,
+    lang: Arc<LangHelper>,
+}
+
+impl DocumentService {
+    pub fn new() -> Self {
+        Self {
+            store: Arc::new(RwLock::new(DocumentStore {
+                documents: HashMap::new(),
+            })),
+        }
+    }
+
+    pub async fn open(&self, uri: &Url, doc: DocumentSnapshot) {
+        self.store.write().await.open(uri, doc);
+    }
+
+    pub async fn update(&self, uri: &Url, doc: DocumentSnapshot) {
+        self.store.write().await.update(uri, doc);
+    }
+
+    pub async fn close(&self, uri: &Url) {
+        self.store.write().await.close(uri);
+    }
+}
+
+impl Backend {
+    pub fn new(client: Client) -> Self {
+        let config = Arc::new(ConfigManager::new(default_runtime_config()));
+        let lang = Arc::new(LangHelper::default());
+
+        Self {
+            client,
+            runtime: RuntimeServices {
+                documents: DocumentService::new(),
+                diagnostics: DiagnosticsService {
+                    config: Arc::clone(&config),
+                    lang: Arc::clone(&lang),
+                },
+                config,
+                lang,
+            },
+        }
+    }
 }
 
 #[tower_lsp::async_trait]
-impl<'a> LanguageServer for Backend {
+impl LanguageServer for Backend {
     async fn initialize(
         &self,
-        para: InitializeParams,
+        _para: InitializeParams,
     ) -> tower_lsp::jsonrpc::Result<InitializeResult> {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
@@ -38,45 +102,35 @@ impl<'a> LanguageServer for Backend {
             ..Default::default()
         })
     }
+
     async fn shutdown(&self) -> tower_lsp::jsonrpc::Result<()> {
         Ok(())
     }
 
     async fn did_open(&self, para: DidOpenTextDocumentParams) {
-        self.publish_placeholder_diagnostic(&para.text_document.uri, &para.text_document.text)
+        self.runtime
+            .diagnostics
+            .publish_placeholder_diagnostic(&self.client, &para.text_document.uri, &para.text_document.text)
             .await;
         self.handle_open(para).await;
     }
+
     async fn did_change(&self, para: DidChangeTextDocumentParams) {
-        self.publish_placeholder_diagnostic(
-            &para.text_document.uri,
-            &para
-                .clone()
-                .content_changes
-                .into_iter()
-                .next()
-                .unwrap()
-                .text,
-        )
-        .await;
+        let changed_text = para
+            .content_changes
+            .first()
+            .map(|change| change.text.clone())
+            .unwrap_or_default();
+
+        self.runtime
+            .diagnostics
+            .publish_placeholder_diagnostic(&self.client, &para.text_document.uri, &changed_text)
+            .await;
 
         self.handle_change(para).await;
     }
 
     async fn did_close(&self, para: DidCloseTextDocumentParams) {
         self.handle_close(para.text_document.uri).await;
-    }
-}
-
-impl Backend {
-    pub fn new(client: Client) -> Self {
-        let diagnostics = Arc::new(RwLock::new(DiagnosticsManager::default()));
-        Self {
-            client,
-            documents: Arc::new(RwLock::new(DocumentStore {
-                documents: HashMap::new(),
-            })),
-            diagnostics,
-        }
     }
 }

@@ -4,14 +4,13 @@ use crate::services::Backend;
 
 impl Backend {
     pub async fn handle_close(&self, uri: Url) {
-        {
-            let mut docs = self.documents.write().await;
-            docs.close(&uri);
-        }
-        {
-            let mut diags = self.diagnostics.write().await;
-            diags.elements.insert(uri.clone(), vec![]);
-        }
+        self.runtime.documents.close(&uri).await;
         self.client.publish_diagnostics(uri, vec![], None).await;
+        self.client
+            .log_message(
+                tower_lsp::lsp_types::MessageType::INFO,
+                self.runtime.lang.document_closed(),
+            )
+            .await;
     }
 }

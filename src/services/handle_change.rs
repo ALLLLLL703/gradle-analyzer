@@ -1,6 +1,6 @@
 use tower_lsp::lsp_types::DidChangeTextDocumentParams;
 
-use crate::{document::DocumentSnapShot, services::Backend};
+use crate::{document::DocumentSnapshot, services::Backend};
 
 impl Backend {
     pub async fn handle_change(&self, params: DidChangeTextDocumentParams) {
@@ -11,14 +11,15 @@ impl Backend {
             return;
         };
 
-        let snapshot = DocumentSnapShot {
+        let snapshot = DocumentSnapshot {
+            uri: uri.clone(),
             version,
             text: change.text,
         };
 
-        {
-            let mut docs = self.documents.write().await;
-            docs.update(&uri, snapshot);
-        }
+        self.runtime.documents.update(&uri, snapshot).await;
+        self.client
+            .log_message(tower_lsp::lsp_types::MessageType::INFO, self.runtime.lang.document_changed())
+            .await;
     }
 }

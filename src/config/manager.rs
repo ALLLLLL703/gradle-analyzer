@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::{runtime::Runtime, sync::RwLock};
+use tokio::sync::RwLock;
 
 use crate::config::model::RuntimeConfig;
 
