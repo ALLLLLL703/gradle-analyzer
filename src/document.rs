@@ -1,6 +1,11 @@
+pub mod findkind;
+
 use std::collections::HashMap;
 
 use tower_lsp::lsp_types::Url;
+
+use crate::document::findkind::GradleFileKind;
+use crate::workspace::WorkspaceRoot;
 
 pub struct DocumentStore {
     pub documents: HashMap<Url, DocumentSnapshot>,
@@ -11,6 +16,8 @@ pub struct DocumentSnapshot {
     pub uri: Url,
     pub version: i32,
     pub text: String,
+    pub kind: GradleFileKind,
+    pub workspace_root: Option<WorkspaceRoot>,
 }
 
 impl DocumentStore {

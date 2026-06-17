@@ -2,6 +2,7 @@ pub mod diagnostics;
 pub mod handle_change;
 pub mod handle_close;
 pub mod handle_open;
+pub mod workspace;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -15,9 +16,10 @@ use tower_lsp::{
 };
 
 use crate::{
-    config::{default::default_runtime_config, manager::ConfigManager},
+    config::manager::ConfigManager,
     document::{DocumentSnapshot, DocumentStore},
     i18n::LangHelper,
+    services::{diagnostics::DiagnosticsService, workspace::WorkspaceService},
 };
 
 pub struct Backend {
@@ -31,6 +33,7 @@ pub struct RuntimeServices {
     pub diagnostics: DiagnosticsService,
     pub config: Arc<ConfigManager>,
     pub lang: Arc<LangHelper>,
+    pub workspace: Arc<WorkspaceService>,
 }
 
 #[derive(Clone)]
@@ -38,10 +41,10 @@ pub struct DocumentService {
     store: Arc<RwLock<DocumentStore>>,
 }
 
-#[derive(Clone)]
-pub struct DiagnosticsService {
-    config: Arc<ConfigManager>,
-    lang: Arc<LangHelper>,
+impl Default for DocumentService {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DocumentService {
@@ -68,8 +71,9 @@ impl DocumentService {
 
 impl Backend {
     pub fn new(client: Client) -> Self {
-        let config = Arc::new(ConfigManager::new(default_runtime_config()));
+        let config = ConfigManager::global();
         let lang = Arc::new(LangHelper::default());
+        let workspace_service = Arc::new(WorkspaceService::new(Arc::clone(&config)));
 
         Self {
             client,
@@ -78,9 +82,11 @@ impl Backend {
                 diagnostics: DiagnosticsService {
                     config: Arc::clone(&config),
                     lang: Arc::clone(&lang),
+                    diagnostics: Default::default(),
                 },
                 config,
                 lang,
+                workspace: workspace_service,
             },
         }
     }
@@ -108,11 +114,15 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, para: DidOpenTextDocumentParams) {
+        self.handle_open(para.clone()).await;
         self.runtime
             .diagnostics
-            .publish_placeholder_diagnostic(&self.client, &para.text_document.uri, &para.text_document.text)
+            .publish_placeholder_diagnostic(
+                &self.client,
+                &para.text_document.uri,
+                &para.text_document.text,
+            )
             .await;
-        self.handle_open(para).await;
     }
 
     async fn did_change(&self, para: DidChangeTextDocumentParams) {

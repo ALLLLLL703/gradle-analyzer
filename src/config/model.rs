@@ -25,6 +25,7 @@ pub struct RawGradleConfig {
     pub scan_depth: Option<usize>,
     pub enable_kotlin_dsl: Option<bool>,
     pub enable_groovy_dsl: Option<bool>,
+    pub root_scan_depth: Option<usize>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -58,6 +59,7 @@ pub struct GradleConfig {
     pub scan_depth: usize,
     pub enable_kotlin_dsl: bool,
     pub enable_groovy_dsl: bool,
+    pub root_scan_detph: usize,
 }
 
 #[derive(Clone, Debug)]

@@ -3,3 +3,4 @@ pub mod document;
 pub mod i18n;
 pub mod logging;
 pub mod services;
+pub mod workspace;

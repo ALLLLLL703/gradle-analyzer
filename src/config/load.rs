@@ -25,6 +25,7 @@ pub fn load_runtime_config(path: &Path) -> anyhow::Result<RuntimeConfig> {
             scan_depth: raw.gradle.scan_depth.unwrap_or(8),
             enable_kotlin_dsl: raw.gradle.enable_kotlin_dsl.unwrap_or(true),
             enable_groovy_dsl: raw.gradle.enable_groovy_dsl.unwrap_or(true),
+            root_scan_detph: raw.gradle.root_scan_depth.unwrap_or(8),
         },
         i18n: I18nConfig {
             default_locale: raw

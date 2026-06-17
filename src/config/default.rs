@@ -14,6 +14,8 @@ pub fn default_runtime_config() -> RuntimeConfig {
             scan_depth: 8,
             enable_kotlin_dsl: true,
             enable_groovy_dsl: true,
+
+            root_scan_detph: 8,
         },
         i18n: I18nConfig {
             default_locale: "zh-CN".to_string(),
