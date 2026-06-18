@@ -32,6 +32,39 @@ pub fn english_template(key: MessageKey) -> Option<&'static str> {
         MessageKey::ConfigParseError => "Configuration file '{0}' is not valid TOML: {1}",
         MessageKey::ConfigValidationError => "Configuration value '{0}' is invalid: {1}",
         MessageKey::ConfigReloaded => "Reloaded configuration from '{0}'.",
+        MessageKey::SidecarWrapperMissing => {
+            "Gradle wrapper not found; advanced model unavailable, static analysis continues."
+        }
+        MessageKey::SidecarWrapperNotExecutable => {
+            "Gradle wrapper is not executable; advanced model unavailable, static analysis continues."
+        }
+        MessageKey::SidecarMissingJvm => {
+            "No compatible JVM found for the Gradle sidecar; static analysis continues."
+        }
+        MessageKey::SidecarSyncFailure => {
+            "Gradle sync failed ({0}); advanced model unavailable, static analysis continues."
+        }
+        MessageKey::SidecarTimeout => {
+            "Gradle model request timed out after {0} ms; static analysis continues."
+        }
+        MessageKey::SidecarMalformedFrame => {
+            "Received a malformed sidecar message ({0}); advanced model unavailable, static analysis continues."
+        }
+        MessageKey::SidecarSchemaMismatch => {
+            "Sidecar protocol version {0} is unsupported; advanced model unavailable, static analysis continues."
+        }
+        MessageKey::SidecarCanceled => {
+            "Gradle model request was canceled; static analysis continues."
+        }
+        MessageKey::SidecarStaleCache => {
+            "Cached Gradle model is stale; advanced model unavailable until refresh, static analysis continues."
+        }
+        MessageKey::SyntaxMissingEquals => "Missing '=' in assignment.",
+        MessageKey::SyntaxKeywordTypo => "'{0}' looks like a misspelled keyword.",
+        MessageKey::SyntaxUnclosedBlock => "Block opened here is never closed.",
+        MessageKey::SyntaxMalformedBlock => "Block contents are malformed.",
+        MessageKey::SyntaxUnterminatedString => "String literal is not terminated.",
+        MessageKey::SyntaxUnexpectedToken => "Unexpected '{0}'.",
         MessageKey::UntranslatedProbe => return None,
     };
     Some(template)

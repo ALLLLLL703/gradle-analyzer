@@ -23,3 +23,6 @@ thiserror = "2.0.18"
 toml = "1.1.2"
 notify = "8.2.0"
 arc-swap = "1.9.1"
+
+[dev-dependencies]
+tokio = { version = "1.52.3", features = ["test-util", "macros", "rt", "rt-multi-thread", "time"] }

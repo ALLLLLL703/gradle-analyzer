@@ -41,6 +41,44 @@ pub enum MessageKey {
     /// The live configuration snapshot was reloaded.
     ConfigReloaded,
 
+    // --- Sidecar failure statuses ---
+    // Each maps 1:1 to a `crate::gradle::sidecar::SidecarFailure` variant and renders a
+    // distinct, user-facing status while the static tier stays live (degraded fallback).
+    /// The Gradle wrapper script was not found in the workspace.
+    SidecarWrapperMissing,
+    /// The Gradle wrapper exists but is not executable.
+    SidecarWrapperNotExecutable,
+    /// No suitable JVM was found to launch the sidecar.
+    SidecarMissingJvm,
+    /// The Gradle sync / build action failed inside the sidecar.
+    SidecarSyncFailure,
+    /// A sidecar request exceeded its configured deadline.
+    SidecarTimeout,
+    /// A sidecar IPC frame could not be decoded (oversized or non-JSON).
+    SidecarMalformedFrame,
+    /// The sidecar spoke an incompatible protocol version.
+    SidecarSchemaMismatch,
+    /// A sidecar request was canceled before completion.
+    SidecarCanceled,
+    /// The cached sidecar model is stale and was rejected.
+    SidecarStaleCache,
+
+    // --- Syntax diagnostics (rendered by the Task 9 diagnostics layer) ---
+    // Each maps 1:1 to a `crate::gradle::syntax::SyntaxErrorKind` variant so the tolerant
+    // parser keeps raw English strings internal and the diagnostics surface stays localized.
+    /// An assignment is missing its `=` operator.
+    SyntaxMissingEquals,
+    /// An identifier looks like a misspelled keyword.
+    SyntaxKeywordTypo,
+    /// A block was opened but never closed before end of input.
+    SyntaxUnclosedBlock,
+    /// A block was opened but its contents are malformed.
+    SyntaxMalformedBlock,
+    /// A string literal was never closed before end of line or input.
+    SyntaxUnterminatedString,
+    /// A token was encountered where the grammar did not expect one.
+    SyntaxUnexpectedToken,
+
     /// Reserved key intentionally absent from the catalog.
     ///
     /// It models a key added to the enum before its catalog entry exists, and lets
@@ -63,6 +101,21 @@ impl MessageKey {
             MessageKey::ConfigParseError => "config.parse_error",
             MessageKey::ConfigValidationError => "config.validation_error",
             MessageKey::ConfigReloaded => "config.reloaded",
+            MessageKey::SidecarWrapperMissing => "sidecar.wrapper_missing",
+            MessageKey::SidecarWrapperNotExecutable => "sidecar.wrapper_not_executable",
+            MessageKey::SidecarMissingJvm => "sidecar.missing_jvm",
+            MessageKey::SidecarSyncFailure => "sidecar.sync_failure",
+            MessageKey::SidecarTimeout => "sidecar.timeout",
+            MessageKey::SidecarMalformedFrame => "sidecar.malformed_frame",
+            MessageKey::SidecarSchemaMismatch => "sidecar.schema_mismatch",
+            MessageKey::SidecarCanceled => "sidecar.canceled",
+            MessageKey::SidecarStaleCache => "sidecar.stale_cache",
+            MessageKey::SyntaxMissingEquals => "syntax.missing_equals",
+            MessageKey::SyntaxKeywordTypo => "syntax.keyword_typo",
+            MessageKey::SyntaxUnclosedBlock => "syntax.unclosed_block",
+            MessageKey::SyntaxMalformedBlock => "syntax.malformed_block",
+            MessageKey::SyntaxUnterminatedString => "syntax.unterminated_string",
+            MessageKey::SyntaxUnexpectedToken => "syntax.unexpected_token",
             MessageKey::UntranslatedProbe => "diag.untranslated_probe",
         }
     }
