@@ -79,6 +79,16 @@ pub enum MessageKey {
     /// A token was encountered where the grammar did not expect one.
     SyntaxUnexpectedToken,
 
+    // --- Workspace root resolution status ---
+    // Surfaced to the user (e.g. via the LSP client log) to explain how the workspace
+    // root was determined, since the chosen root governs every later project-graph fact.
+    /// The workspace root was resolved from a `settings.gradle*` ancestor.
+    WorkspaceRootFromSettings,
+    /// No settings script was found; the root fell back to a top-level build script.
+    WorkspaceRootFromBuildScript,
+    /// No Gradle root marker was found for the document.
+    WorkspaceRootUnresolved,
+
     /// Reserved key intentionally absent from the catalog.
     ///
     /// It models a key added to the enum before its catalog entry exists, and lets
@@ -116,6 +126,9 @@ impl MessageKey {
             MessageKey::SyntaxMalformedBlock => "syntax.malformed_block",
             MessageKey::SyntaxUnterminatedString => "syntax.unterminated_string",
             MessageKey::SyntaxUnexpectedToken => "syntax.unexpected_token",
+            MessageKey::WorkspaceRootFromSettings => "workspace.root_from_settings",
+            MessageKey::WorkspaceRootFromBuildScript => "workspace.root_from_build_script",
+            MessageKey::WorkspaceRootUnresolved => "workspace.root_unresolved",
             MessageKey::UntranslatedProbe => "diag.untranslated_probe",
         }
     }

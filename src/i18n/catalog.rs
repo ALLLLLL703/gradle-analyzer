@@ -65,6 +65,15 @@ pub fn english_template(key: MessageKey) -> Option<&'static str> {
         MessageKey::SyntaxMalformedBlock => "Block contents are malformed.",
         MessageKey::SyntaxUnterminatedString => "String literal is not terminated.",
         MessageKey::SyntaxUnexpectedToken => "Unexpected '{0}'.",
+        MessageKey::WorkspaceRootFromSettings => {
+            "Workspace root resolved to '{0}' from a settings script."
+        }
+        MessageKey::WorkspaceRootFromBuildScript => {
+            "No settings script found; workspace root fell back to build script directory '{0}'."
+        }
+        MessageKey::WorkspaceRootUnresolved => {
+            "No Gradle workspace root could be resolved for '{0}'."
+        }
         MessageKey::UntranslatedProbe => return None,
     };
     Some(template)
