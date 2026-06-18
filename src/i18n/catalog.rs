@@ -74,6 +74,15 @@ pub fn english_template(key: MessageKey) -> Option<&'static str> {
         MessageKey::WorkspaceRootUnresolved => {
             "No Gradle workspace root could be resolved for '{0}'."
         }
+        MessageKey::SemanticCatalogResolved => {
+            "Catalog accessor '{0}' resolves to '{1}'."
+        }
+        MessageKey::SemanticCatalogUnresolved => {
+            "Catalog accessor '{0}' does not match any version-catalog entry."
+        }
+        MessageKey::SemanticCatalogParseError => {
+            "Version catalog '{0}' could not be parsed; catalog entries are unavailable."
+        }
         MessageKey::UntranslatedProbe => return None,
     };
     Some(template)

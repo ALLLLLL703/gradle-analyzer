@@ -89,6 +89,16 @@ pub enum MessageKey {
     /// No Gradle root marker was found for the document.
     WorkspaceRootUnresolved,
 
+    // --- Semantic graph (dependency / catalog resolution status) ---
+    // Surfaced when reporting how a `libs.*` accessor resolved against the version catalog,
+    // and when a catalog file could not be parsed; rendered by the Task 9+ feature layers.
+    /// A version-catalog accessor resolved to a catalog coordinate.
+    SemanticCatalogResolved,
+    /// A version-catalog accessor did not match any catalog entry.
+    SemanticCatalogUnresolved,
+    /// A version-catalog file could not be parsed as TOML.
+    SemanticCatalogParseError,
+
     /// Reserved key intentionally absent from the catalog.
     ///
     /// It models a key added to the enum before its catalog entry exists, and lets
@@ -129,6 +139,9 @@ impl MessageKey {
             MessageKey::WorkspaceRootFromSettings => "workspace.root_from_settings",
             MessageKey::WorkspaceRootFromBuildScript => "workspace.root_from_build_script",
             MessageKey::WorkspaceRootUnresolved => "workspace.root_unresolved",
+            MessageKey::SemanticCatalogResolved => "semantic.catalog_resolved",
+            MessageKey::SemanticCatalogUnresolved => "semantic.catalog_unresolved",
+            MessageKey::SemanticCatalogParseError => "semantic.catalog_parse_error",
             MessageKey::UntranslatedProbe => "diag.untranslated_probe",
         }
     }

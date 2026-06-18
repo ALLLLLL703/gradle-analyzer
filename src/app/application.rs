@@ -151,4 +151,125 @@ mod tests {
         drop(client_to_server);
         let _ = tokio::time::timeout(std::time::Duration::from_secs(5), server).await;
     }
+
+    #[tokio::test]
+    async fn initialize_advertises_full_v1_capability_set() {
+        let (mut client_to_server, server_reader) = tokio::io::duplex(64 * 1024);
+        let (server_writer, mut server_to_client) = tokio::io::duplex(64 * 1024);
+        let app = Application::with_services(
+            ConfigManager::new(GradleAnalyzerConfig::default()),
+            Translator::new(),
+        );
+        let server = tokio::spawn(app.run_with_io(server_reader, server_writer));
+
+        let init = request(1, "initialize", serde_json::json!({ "capabilities": {} }));
+        client_to_server.write_all(&encode_frame(&init)).await.unwrap();
+        let response = read_until_id(&mut server_to_client, 1).await;
+
+        let caps = &response["result"]["capabilities"];
+        assert_eq!(caps["textDocumentSync"], 1, "text sync FULL: {response}");
+        assert!(caps.get("documentSymbolProvider").is_some(), "{response}");
+        assert!(caps.get("completionProvider").is_some(), "{response}");
+        assert!(caps.get("definitionProvider").is_some(), "{response}");
+        assert!(caps.get("referencesProvider").is_some(), "{response}");
+        assert!(caps.get("codeActionProvider").is_some(), "{response}");
+        assert!(caps.get("hoverProvider").is_some(), "{response}");
+        let triggers = &caps["completionProvider"]["triggerCharacters"];
+        assert!(triggers.as_array().unwrap().iter().any(|c| c == "."));
+        assert!(triggers.as_array().unwrap().iter().any(|c| c == "{"));
+
+        drop(client_to_server);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), server).await;
+    }
+
+    #[tokio::test]
+    async fn lifecycle_open_change_close_is_observable_via_document_symbol() {
+        let (mut client_to_server, server_reader) = tokio::io::duplex(64 * 1024);
+        let (server_writer, mut server_to_client) = tokio::io::duplex(64 * 1024);
+        let app = Application::with_services(
+            ConfigManager::new(GradleAnalyzerConfig::default()),
+            Translator::new(),
+        );
+        let server = tokio::spawn(app.run_with_io(server_reader, server_writer));
+
+        let uri = "file:///proj/build.gradle.kts";
+        send(&mut client_to_server, &request(1, "initialize", serde_json::json!({ "capabilities": {} }))).await;
+        let _ = read_until_id(&mut server_to_client, 1).await;
+        send(&mut client_to_server, &notification("initialized", serde_json::json!({}))).await;
+
+        // Before didOpen: documentSymbol has no open snapshot -> null result.
+        send(&mut client_to_server, &document_symbol_request(2, uri)).await;
+        let before = read_until_id(&mut server_to_client, 2).await;
+        assert!(before["result"].is_null(), "closed doc -> null: {before}");
+
+        // didOpen makes the snapshot present -> documentSymbol returns an (empty) array.
+        send(&mut client_to_server, &did_open(uri, 1, "plugins {}")).await;
+        send(&mut client_to_server, &document_symbol_request(3, uri)).await;
+        let opened = read_until_id(&mut server_to_client, 3).await;
+        assert!(opened["result"].is_array(), "open doc -> array: {opened}");
+
+        // didChange replaces the snapshot; still observable (array).
+        send(&mut client_to_server, &did_change(uri, 2, "plugins { java }")).await;
+        send(&mut client_to_server, &document_symbol_request(4, uri)).await;
+        let changed = read_until_id(&mut server_to_client, 4).await;
+        assert!(changed["result"].is_array(), "changed doc -> array: {changed}");
+
+        // didClose removes it -> back to null.
+        send(&mut client_to_server, &did_close(uri)).await;
+        send(&mut client_to_server, &document_symbol_request(5, uri)).await;
+        let closed = read_until_id(&mut server_to_client, 5).await;
+        assert!(closed["result"].is_null(), "closed doc -> null: {closed}");
+
+        drop(client_to_server);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), server).await;
+    }
+
+    async fn send<W: tokio::io::AsyncWrite + Unpin>(writer: &mut W, value: &serde_json::Value) {
+        writer.write_all(&encode_frame(value)).await.unwrap();
+    }
+
+    async fn read_until_id<R: AsyncRead + Unpin>(reader: &mut R, id: i64) -> serde_json::Value {
+        loop {
+            let frame = read_frame_async(reader).await.unwrap();
+            if frame.get("id") == Some(&serde_json::json!(id)) {
+                return frame;
+            }
+        }
+    }
+
+    fn document_symbol_request(id: i64, uri: &str) -> serde_json::Value {
+        request(
+            id,
+            "textDocument/documentSymbol",
+            serde_json::json!({ "textDocument": { "uri": uri } }),
+        )
+    }
+
+    fn did_open(uri: &str, version: i32, text: &str) -> serde_json::Value {
+        notification(
+            "textDocument/didOpen",
+            serde_json::json!({
+                "textDocument": {
+                    "uri": uri, "languageId": "gradle", "version": version, "text": text
+                }
+            }),
+        )
+    }
+
+    fn did_change(uri: &str, version: i32, text: &str) -> serde_json::Value {
+        notification(
+            "textDocument/didChange",
+            serde_json::json!({
+                "textDocument": { "uri": uri, "version": version },
+                "contentChanges": [ { "text": text } ]
+            }),
+        )
+    }
+
+    fn did_close(uri: &str) -> serde_json::Value {
+        notification(
+            "textDocument/didClose",
+            serde_json::json!({ "textDocument": { "uri": uri } }),
+        )
+    }
 }
