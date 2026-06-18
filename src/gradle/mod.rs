@@ -6,7 +6,11 @@
 //! so later work attaches without restructuring.
 
 pub mod parser;
+pub mod completion;
+pub mod diagnostics;
+pub mod navigation;
 pub mod semantic;
 pub mod sidecar;
+pub mod symbols;
 pub mod syntax;
 pub mod workspace;

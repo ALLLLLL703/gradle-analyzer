@@ -16,4 +16,4 @@ pub mod watcher;
 pub use error::ConfigError;
 pub use loader::ConfigSources;
 pub use manager::ConfigManager;
-pub use model::GradleAnalyzerConfig;
+pub use model::{CompletionConfig, GradleAnalyzerConfig};

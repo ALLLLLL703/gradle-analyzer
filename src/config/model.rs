@@ -34,6 +34,8 @@ pub struct GradleAnalyzerConfig {
     pub watcher: WatcherConfig,
     /// LSP transport limits.
     pub transport: TransportConfig,
+    /// Completion engine tuning.
+    pub completion: CompletionConfig,
 }
 
 /// Sidecar process limits used by later sidecar tasks.
@@ -81,6 +83,13 @@ pub struct TransportConfig {
     pub max_message_bytes: usize,
 }
 
+/// Completion engine tuning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompletionConfig {
+    /// Maximum number of completion candidates returned per request.
+    pub max_candidates: usize,
+}
+
 impl Default for GradleAnalyzerConfig {
     fn default() -> Self {
         Self {
@@ -102,6 +111,7 @@ impl Default for GradleAnalyzerConfig {
             transport: TransportConfig {
                 max_message_bytes: 16 * 1024 * 1024,
             },
+            completion: CompletionConfig { max_candidates: 50 },
         }
     }
 }
@@ -126,6 +136,7 @@ impl GradleAnalyzerConfig {
         require_positive_u64("latency.completion_ms", self.latency.completion_ms)?;
         require_positive_u64("watcher.debounce_ms", self.watcher.debounce_ms)?;
         require_positive_usize("transport.max_message_bytes", self.transport.max_message_bytes)?;
+        require_positive_usize("completion.max_candidates", self.completion.max_candidates)?;
         Ok(())
     }
 }

@@ -99,6 +99,39 @@ pub enum MessageKey {
     /// A version-catalog file could not be parsed as TOML.
     SemanticCatalogParseError,
 
+    // --- Static diagnostics (the Task 9 semantic/unused-import surface) ---
+    // Syntax-error text reuses the `Syntax*` keys above (the substrate's
+    // `SyntaxErrorKind -> MessageKey` map); these three cover the findings the diagnostics
+    // layer derives from semantic facts rather than from the parser's typed error table.
+    /// A uniquely-named declaration (e.g. a task) was declared more than once.
+    DiagnosticDuplicateDeclaration,
+    /// A `dependsOn` names a task with no local declaration (statically certain).
+    DiagnosticUnresolvedTaskRef,
+    /// An `import` is never referenced anywhere else in the file.
+    DiagnosticUnusedImport,
+
+    // --- Completion candidate detail text (rendered by the Task 11 completion engine) ---
+    // Each labels a candidate's user-facing `detail`; the candidate LABEL is a source
+    // identifier and is intentionally NOT translated.
+    /// Detail for a top-level block keyword candidate.
+    CompletionDetailBlockKeyword,
+    /// Detail for a dependency-configuration candidate.
+    CompletionDetailConfiguration,
+    /// Detail for a coordinate-scaffold candidate.
+    CompletionDetailCoordinateScaffold,
+    /// Detail for a plugin-id candidate.
+    CompletionDetailPluginId,
+    /// Detail for a repository-function candidate.
+    CompletionDetailRepository,
+    /// Detail for a version-catalog accessor candidate (carries the resolved target).
+    CompletionDetailCatalogAccessor,
+    /// Detail for a task-name candidate.
+    CompletionDetailTaskName,
+    /// Detail for a project-path candidate.
+    CompletionDetailProjectPath,
+    /// Detail for a safe `import` hint candidate.
+    CompletionDetailImportHint,
+
     /// Reserved key intentionally absent from the catalog.
     ///
     /// It models a key added to the enum before its catalog entry exists, and lets
@@ -142,6 +175,18 @@ impl MessageKey {
             MessageKey::SemanticCatalogResolved => "semantic.catalog_resolved",
             MessageKey::SemanticCatalogUnresolved => "semantic.catalog_unresolved",
             MessageKey::SemanticCatalogParseError => "semantic.catalog_parse_error",
+            MessageKey::DiagnosticDuplicateDeclaration => "diagnostic.duplicate_declaration",
+            MessageKey::DiagnosticUnresolvedTaskRef => "diagnostic.unresolved_task_ref",
+            MessageKey::DiagnosticUnusedImport => "diagnostic.unused_import",
+            MessageKey::CompletionDetailBlockKeyword => "completion.detail.block_keyword",
+            MessageKey::CompletionDetailConfiguration => "completion.detail.configuration",
+            MessageKey::CompletionDetailCoordinateScaffold => "completion.detail.coordinate_scaffold",
+            MessageKey::CompletionDetailPluginId => "completion.detail.plugin_id",
+            MessageKey::CompletionDetailRepository => "completion.detail.repository",
+            MessageKey::CompletionDetailCatalogAccessor => "completion.detail.catalog_accessor",
+            MessageKey::CompletionDetailTaskName => "completion.detail.task_name",
+            MessageKey::CompletionDetailProjectPath => "completion.detail.project_path",
+            MessageKey::CompletionDetailImportHint => "completion.detail.import_hint",
             MessageKey::UntranslatedProbe => "diag.untranslated_probe",
         }
     }

@@ -12,8 +12,8 @@ use serde::Deserialize;
 
 use crate::config::error::ConfigError;
 use crate::config::model::{
-    FeatureToggles, GradleAnalyzerConfig, LatencyConfig, SidecarConfig, TransportConfig,
-    WatcherConfig,
+    CompletionConfig, FeatureToggles, GradleAnalyzerConfig, LatencyConfig, SidecarConfig,
+    TransportConfig, WatcherConfig,
 };
 
 /// The raw, fully-optional TOML representation of configuration.
@@ -38,6 +38,9 @@ pub struct RawConfig {
     /// Transport section.
     #[serde(default)]
     pub transport: RawTransport,
+    /// Completion section.
+    #[serde(default)]
+    pub completion: RawCompletion,
 }
 
 /// Raw sidecar section.
@@ -90,6 +93,14 @@ pub struct RawTransport {
     pub max_message_bytes: Option<usize>,
 }
 
+/// Raw completion section.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawCompletion {
+    /// See [`CompletionConfig::max_candidates`].
+    pub max_candidates: Option<usize>,
+}
+
 impl RawConfig {
     /// Overlays `higher` onto `self`, with `higher`'s set fields winning.
     ///
@@ -137,6 +148,12 @@ impl RawConfig {
                     .transport
                     .max_message_bytes
                     .or(self.transport.max_message_bytes),
+            },
+            completion: RawCompletion {
+                max_candidates: higher
+                    .completion
+                    .max_candidates
+                    .or(self.completion.max_candidates),
             },
         }
     }
@@ -194,6 +211,12 @@ impl RawConfig {
                     .transport
                     .max_message_bytes
                     .unwrap_or(defaults.transport.max_message_bytes),
+            },
+            completion: CompletionConfig {
+                max_candidates: self
+                    .completion
+                    .max_candidates
+                    .unwrap_or(defaults.completion.max_candidates),
             },
         };
         merged.validate()?;

@@ -83,6 +83,20 @@ pub fn english_template(key: MessageKey) -> Option<&'static str> {
         MessageKey::SemanticCatalogParseError => {
             "Version catalog '{0}' could not be parsed; catalog entries are unavailable."
         }
+        MessageKey::DiagnosticDuplicateDeclaration => "Duplicate declaration of '{0}'.",
+        MessageKey::DiagnosticUnresolvedTaskRef => {
+            "Task '{0}' is not declared in this file."
+        }
+        MessageKey::DiagnosticUnusedImport => "Import '{0}' is never used.",
+        MessageKey::CompletionDetailBlockKeyword => "Gradle build block",
+        MessageKey::CompletionDetailConfiguration => "Dependency configuration",
+        MessageKey::CompletionDetailCoordinateScaffold => "Dependency coordinate scaffold",
+        MessageKey::CompletionDetailPluginId => "Gradle plugin id",
+        MessageKey::CompletionDetailRepository => "Artifact repository",
+        MessageKey::CompletionDetailCatalogAccessor => "Version catalog: {0}",
+        MessageKey::CompletionDetailTaskName => "Gradle task",
+        MessageKey::CompletionDetailProjectPath => "Project dependency",
+        MessageKey::CompletionDetailImportHint => "Import",
         MessageKey::UntranslatedProbe => return None,
     };
     Some(template)
