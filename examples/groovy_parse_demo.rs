@@ -69,6 +69,10 @@ dependencies {
     implementation 'org.apache.commons:commons-lang3:3.14.0'
 ";
 
+/// The user's real-world acceptance target (slashy regex + `from({...})` closure args).
+const ACCEPTANCE: &str =
+    include_str!("../tests/fixtures/groovy/acceptance/slay_the_spire2_build.gradle");
+
 fn main() {
     println!("=== gradle-analyzer Groovy (.gradle) frontend demo ===\n");
 
@@ -81,6 +85,32 @@ fn main() {
     let broken = parse_groovy(BROKEN);
     report(BROKEN, &broken);
     println!("\n{}", broken_verdict(BROKEN, &broken));
+
+    println!("\n########## 3. ACCEPTANCE: real-world slay_the_spire2_build.gradle ##########");
+    let real = parse_groovy(ACCEPTANCE);
+    let red = SyntaxNode::new_root(real.green.clone());
+    let round_trip = red.text() == ACCEPTANCE;
+    println!("  file bytes   : {}", ACCEPTANCE.len());
+    println!("  error_count  : {}", real.errors.len());
+    println!("  round_trip   : {round_trip}");
+    if !real.errors.is_empty() {
+        for error in real.errors.as_slice() {
+            println!(
+                "    {:?} @ {}..{}",
+                error.kind,
+                error.span.start,
+                error.span.end()
+            );
+        }
+    }
+    println!(
+        "\n{}",
+        if real.errors.is_empty() && round_trip {
+            "PASS: real-world build.gradle parses with ZERO errors and round-trips exactly."
+        } else {
+            "CHECK: acceptance file did not reach 0 errors / exact round-trip."
+        }
+    );
 }
 
 /// Prints tree shape, round-trip check, and the typed error list for one parse.
@@ -216,5 +246,17 @@ mod tests {
             .find(|e| e.kind == SyntaxErrorKind::UnclosedBlock)
             .expect("broken file reports UnclosedBlock");
         assert_ne!(unclosed.span.start, 0, "anchored, not EOF-zero");
+    }
+
+    #[test]
+    fn acceptance_real_file_parses_with_zero_errors_and_round_trips() {
+        let parse = parse_groovy(ACCEPTANCE);
+        let red = SyntaxNode::new_root(parse.green.clone());
+        assert_eq!(red.text(), ACCEPTANCE, "acceptance file round-trips exactly");
+        assert!(
+            parse.errors.is_empty(),
+            "acceptance file must parse with ZERO errors, got {:?}",
+            parse.errors.as_slice()
+        );
     }
 }

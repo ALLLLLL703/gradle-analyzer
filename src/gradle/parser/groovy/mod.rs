@@ -13,6 +13,7 @@
 
 mod blocks;
 mod calls;
+mod slashy;
 
 use crate::gradle::syntax::{Parse, Parser, SyntaxKind};
 
@@ -53,7 +54,8 @@ pub const LIST_LITERAL: SyntaxKind = SyntaxKind::from_raw(SyntaxKind::FIRST_CUST
 /// assert!(parse.errors.is_empty()); // valid Gradle Groovy parses cleanly
 /// ```
 pub fn parse_groovy(source: &str) -> Parse {
-    Parser::new(source).parse_with(|p| {
+    let relexed = slashy::relex(source);
+    Parser::with_tokens(source, relexed.tokens, relexed.errors).parse_with(|p| {
         while !p.at_eof() {
             parse_statement(p);
         }
@@ -322,5 +324,73 @@ mod tests {
         let parse = parse_groovy("implementation libs.junit.jupiter\n");
         assert!(parse.errors.is_empty(), "clean libs accessor, got {:?}", parse.errors.as_slice());
         assert_eq!(parse.text(), "implementation libs.junit.jupiter\n");
+    }
+
+    #[test]
+    fn acceptance_real_world_build_gradle_parses_with_zero_errors() {
+        let source =
+            include_str!("../../../../tests/fixtures/groovy/acceptance/slay_the_spire2_build.gradle");
+        let parse = parse_groovy(source);
+        assert_eq!(parse.text(), source, "acceptance file must round-trip exactly");
+        assert!(
+            parse.errors.is_empty(),
+            "ACCEPTANCE TARGET: real-world build.gradle must parse with ZERO errors, got {:?}",
+            parse.errors.as_slice()
+        );
+    }
+
+    #[test]
+    fn slashy_regex_with_embedded_quotes_is_zero_errors() {
+        let parse = parse_groovy("def m = s =~ /\"path\".*?\"([^\"]*)\"/\n");
+        assert_eq!(parse.text(), "def m = s =~ /\"path\".*?\"([^\"]*)\"/\n");
+        assert!(
+            parse.errors.is_empty(),
+            "a slashy regex with embedded quotes must not flood errors, got {:?}",
+            parse.errors.as_slice()
+        );
+    }
+
+    #[test]
+    fn simple_slashy_string_is_zero_errors() {
+        let parse = parse_groovy("def m = s =~ /abc/\n");
+        assert_eq!(parse.text(), "def m = s =~ /abc/\n");
+        assert!(parse.errors.is_empty(), "simple slashy, got {:?}", parse.errors.as_slice());
+    }
+
+    #[test]
+    fn division_is_not_a_slashy_string() {
+        let parse = parse_groovy("def r = a / b / c\n");
+        assert_eq!(parse.text(), "def r = a / b / c\n");
+        assert!(parse.errors.is_empty(), "division stays division, got {:?}", parse.errors.as_slice());
+    }
+
+    #[test]
+    fn comments_are_not_slashy_strings() {
+        let parse = parse_groovy("// hi\n/* block */\ndef x = 1\n");
+        assert_eq!(parse.text(), "// hi\n/* block */\ndef x = 1\n");
+        assert!(parse.errors.is_empty(), "comments untouched, got {:?}", parse.errors.as_slice());
+    }
+
+    #[test]
+    fn closure_literal_as_call_argument_is_zero_errors() {
+        let parse = parse_groovy("from({\n  resolveBuiltDllPath()\n})\n");
+        assert_eq!(parse.text(), "from({\n  resolveBuiltDllPath()\n})\n");
+        assert!(
+            parse.errors.is_empty(),
+            "closure literal `from({{...}})` must parse cleanly, got {:?}",
+            parse.errors.as_slice()
+        );
+    }
+
+    #[test]
+    fn unterminated_slashy_degrades_without_flood() {
+        // No closing `/` before EOL: degrade gracefully (no panic, no error flood).
+        let parse = parse_groovy("def m = s =~ /abc\n");
+        assert_eq!(parse.text(), "def m = s =~ /abc\n", "round-trip preserved");
+        assert!(
+            parse.errors.len() <= 1,
+            "unterminated slashy degrades to at most one tolerant error, got {:?}",
+            parse.errors.as_slice()
+        );
     }
 }

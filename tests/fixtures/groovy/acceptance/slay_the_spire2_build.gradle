@@ -1,0 +1,334 @@
+import groovy.json.JsonOutput
+
+
+import java.nio.file.Files
+
+import io.github.evilmoddevelopment.pcktools.PackPckTask
+import java.nio.file.Paths
+
+plugins {
+    id 'com.itiviti.dotnet' version "3.2.0"
+}
+
+// ---------- Meta ----------
+
+String modId = 'RTRsMoeifyMod'
+String modVersion = '0.1.0'
+String devPlatform = getPlatform()
+String sts2GamePath = detectSts2GamePath()
+String sts2DataPath = "${sts2GamePath}/data_sts2_windows_x86_64"
+String sts2ModsPath = "${sts2GamePath}/mods"
+String modDeployPath = "${sts2ModsPath}/${modId}"
+
+String modArtifactPath = "build/ModArtifact"
+String modReleasePath = "${modArtifactPath}/${modId}"
+String modBuildOutPutPath = "${modArtifactPath}/temp"
+def resolveBuiltDllPath = {
+
+    def candidates = [
+            "${modBuildOutPutPath}/${modId}.dll",
+            "${modBuildOutPutPath}/${modId}/${modId}.dll",
+            ".godot/mono/temp/obj/ExportRelease/${modId}.dll",
+            ".godot/mono/temp/bin/Release/${modId}.dll",
+            ".godot/mono/temp/bin/Debug/${modId}.dll"
+    ].collect { file(it) }
+
+    def existing = candidates.find { it.exists() }
+    if (existing != null) {
+        logger.lifecycle("Using built DLL at ${existing}")
+        return existing
+    }
+
+    throw new GradleException("Could not locate built DLL. Checked: ${candidates*.path.join(', ')}")
+}
+
+
+
+// Meke Rider Happy
+fixIntelliSense(sts2DataPath)
+
+
+// ---------- 平台检测 ----------
+
+static def  getPlatform() {
+    def os = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+    if (os.contains('win')) return 'windows'
+    if (os.contains('mac')) return 'macos'
+    if (os.contains('linux') || os.contains('nix')) return 'linux'
+
+    return 'unknown'
+}
+
+// ---------- 自动查找 StS2 游戏根目录 ----------
+// 超绝ai code 够矢， 只能说人类确实写不了正则匹配
+def detectSts2GamePath() {
+    def platform = getPlatform()
+    switch (platform) {
+        case 'windows': return findSts2OnWindows()
+        case 'macos':   return findSts2OnMac()
+        case 'linux':   return findSts2OnLinux()
+        default:
+            return StS2GamePath
+    }
+}
+
+
+def findSts2OnWindows() {
+    def steamPath = getSteamPathFromRegistry()
+    if (steamPath == null) {
+        logger.warn("Steam not found in registry, falling back to default path")
+        steamPath = "C:/Program Files (x86)/Steam"
+    }
+
+    def libraryPaths = getSteamLibraryPaths(steamPath)
+
+    def appId = "2868840"
+    for (lib in libraryPaths) {
+        def manifestFile = file("${lib}/steamapps/appmanifest_${appId}.acf")
+        if (manifestFile.exists()) {
+            def manifestContent = manifestFile.text
+            def match = manifestContent =~ /"installdir"\s*"([^"]+)"/
+            if (match.find()) {
+                def installDir = match.group(1)
+
+                def gamePath = file("${lib}/steamapps/common/${installDir}")
+                if (gamePath.exists()) {
+                    logger.lifecycle("Found Slay the Spire 2 at: $gamePath")
+                    return gamePath.absolutePath
+                }
+            }
+        }
+    }
+    throw new GradleException("Could not find Slay the Spire 2 installation. Please set sts2GamePath manually in gradle.properties")
+}
+
+def static getSteamPathFromRegistry() {
+    def queryCmd = "reg query HKCU\\Software\\Valve\\Steam /v SteamPath"
+    try {
+        def output = queryCmd.execute().text
+        def match = output =~ /SteamPath\s+REG_SZ\s+(.*)/
+        if (match.find()) {
+            return match.group(1).trim().replace('\\', '/')
+        }
+    } catch (Exception ignored) {}
+    return null
+}
+
+
+def getSteamLibraryPaths(String steamPath) {
+    def libraryFile = file("${steamPath}/steamapps/libraryfolders.vdf")
+    def paths = new LinkedHashSet<String>()
+    paths.add(steamPath.toLowerCase().replace('\\', '/'))
+
+    if (libraryFile.exists()) {
+        libraryFile.eachLine { line ->
+            def match = line =~ /"path".*?"([^"]*)"/
+            if (match.find()) {
+                def libPath = match.group(1).replace('\\\\', '/').replace('\\', '/').toLowerCase()
+                paths.add(libPath)
+            }
+        }
+    }
+    logger.info("Found Steam library paths: ${paths}")
+    return paths as List
+}
+
+
+
+def findSts2OnMac() {
+
+    def home = System.getProperty('user.home')
+    def steamPath = "${home}/Library/Application Support/Steam"
+    def possiblePaths = [
+            "${steamPath}/steamapps/common/Slay the Spire 2/SlayTheSpire2.app/Contents/Resources",
+            "${steamPath}/steamapps/common/Slay the Spire 2"
+    ]
+    for (path in possiblePaths) {
+        def dir = file(path)
+        if (dir.exists()) return dir.absolutePath
+    }
+    return StS2GamePath
+}
+
+def findSts2OnLinux() {
+    def home = System.getProperty('user.home')
+    def steamPath = "${home}/.local/share/Steam"
+    def gamePath = "${steamPath}/steamapps/common/Slay the Spire 2"
+    if (file(gamePath).exists()) return gamePath
+    return StS2GamePath
+}
+
+
+def fixIntelliSense(String path){
+    def link = file("ext")
+    def targetDir = file(path)
+
+    if (!targetDir.exists()) {
+        logger.warn("sts2DataPath does not exist: $targetDir. Cannot prepare lib.")
+        return
+    }
+
+
+    if (link.exists()) {
+        if (Files.isSymbolicLink(link.toPath())) {
+            def existingTarget = Files.readSymbolicLink(link.toPath()).toFile()
+            if (existingTarget.canonicalPath == targetDir.canonicalPath) {
+                logger.debug("Symlink lib already correct.")
+                return
+            } else {
+                logger.lifecycle("Symlink lib points to wrong target, recreating...")
+                link.delete()
+            }
+        } else if (link.isDirectory()) {
+            def dll1 = file("lib/0Harmony.dll")
+            def dll2 = file("lib/sts2.dll")
+            if (dll1.exists() && dll2.exists()) {
+                logger.debug("lib directory already contains required DLLs.")
+                return
+            } else {
+                logger.lifecycle("lib directory exists but missing DLLs, will copy files.")
+            }
+        }
+    }
+
+    boolean symlinkCreated = false
+    if (!link.exists()) {
+        try {
+            Files.createSymbolicLink(link.toPath(), targetDir.toPath())
+            logger.lifecycle("Created symlink: lib -> $targetDir")
+            symlinkCreated = true
+        } catch (Exception e) {
+            logger.warn("Cannot create symlink (insufficient privileges): ${e.message}")
+        }
+    }
+
+		
+    if (!symlinkCreated) {
+        logger.lifecycle("Falling back to copying DLLs from $targetDir to lib/")
+        link.mkdirs()  // 确保 lib 目录存在
+        copy {
+            from targetDir
+            into link
+            include "0Harmony.dll", "sts2.dll"
+        }
+        logger.lifecycle("Copied 0Harmony.dll and sts2.dll to lib/")
+    }
+}
+
+
+// ---- custom task ----
+
+tasks.register('cleanDir') {
+    delete(fileTree(modReleasePath))
+    logger.lifecycle("Cleaned: ${modReleasePath}")
+}
+
+
+
+tasks.register('extractDll', Copy) {
+    dependsOn cleanDir , build
+    into modReleasePath
+    outputs.upToDateWhen { false }
+
+    from({
+        resolveBuiltDllPath()
+    })
+
+    doLast {
+       delete(fileTree(modBuildOutPutPath))
+    }
+}
+
+
+
+tasks.register('packPck', PackPckTask) {
+    dependsOn extractDll
+    // resPrefix.convention(modId)
+    outputFile.convention("${modReleasePath}/${modId}.pck")
+}
+
+
+
+tasks.register('buildModMeta') {
+    dependsOn packPck
+    var outputFile = file("${modReleasePath}/${modId}.json")
+    outputs.file(outputFile)
+
+    doLast {
+        def data = [
+                    "id": modId,
+                    "name": modId,
+                    "author": "EvilModDevelopment",
+                    "description": "test",
+                    "version": version,
+                    "has_pck": true,
+                    "has_dll": true,
+                    "dependencies": [],
+                    "affects_gameplay": false
+        ]
+
+        String jsonString = JsonOutput.prettyPrint(JsonOutput.toJson(data))
+
+        outputFile.parentFile.mkdirs()
+        outputFile.text = jsonString
+
+        println "JSON file generated at ${outputFile.absolutePath}"
+    }
+}
+tasks.register("releaseMod",Zip){
+    dependsOn buildModMeta
+    from modReleasePath
+    destinationDirectory = file(modArtifactPath)
+    archiveFileName = "${modId}-${modVersion}.zip"
+
+}
+
+
+tasks.register("deployMod",Copy){
+    dependsOn releaseMod
+    from modReleasePath
+    into modDeployPath
+    outputs.upToDateWhen { false }
+    doFirst {
+	      delete("${modDeployPath}/${modId}.pck",
+				"${modDeployPath}/${modId}.dll",
+				"${modDeployPath}/${modId}.json",
+				)
+    }
+}
+
+
+
+
+tasks.register("onlyDll",Copy){
+	dependsOn build
+	outputs.upToDateWhen {false}
+	from({
+		resolveBuiltDllPath()
+	})
+	into modDeployPath
+	doFirst{
+		mkdir(modDeployPath)
+		delete("${modDeployPath}/${modId}.dll")
+	}
+
+
+}
+
+// ---- dotnet ----
+dotnet {
+
+    dotnetExecutable = 'dotnet'
+    solution = "${modId}.sln"
+    configuration = 'ExportRelease'
+    verbosity = 'Normal'
+    preReleaseCheck = false
+
+    build{
+        Sts2DataDir = sts2DataPath
+        OutputPath = modBuildOutPutPath
+        version = modVersion
+        packageVersion = modVersion
+    }
+}
+

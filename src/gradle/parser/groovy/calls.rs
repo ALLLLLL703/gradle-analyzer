@@ -130,6 +130,10 @@ fn parse_atom(p: &mut Parser) -> Head {
         parse_arg_list(p);
         return Head::Other;
     }
+    if p.at_text("{") {
+        parse_closure(p);
+        return Head::Other;
+    }
     p.bump_any();
     Head::Other
 }
