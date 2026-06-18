@@ -1,13 +1,13 @@
-use tower_lsp::{
-    Client, LanguageServer,
-    lsp_types::{InitializeParams, InitializeResult},
-};
+//! Thin binary entry point for the gradle-analyzer language server.
+//!
+//! Bootstraps logging, then hands control to [`gradle_analyzer::app::Application`],
+//! which owns the `tower-lsp` stdio server loop. All real logic lives in the library
+//! crate so it stays testable.
 
-pub struct Backend {
-    client: Client,
-}
+use gradle_analyzer::app::{Application, logging};
 
 #[tokio::main]
 async fn main() {
-    println!("Hello World");
+    logging::init_tracing();
+    Application::bootstrap().run().await;
 }

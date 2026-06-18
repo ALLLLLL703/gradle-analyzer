@@ -1,0 +1,36 @@
+# gradle-analyzer configuration (example).
+#
+# Place this file at one of (workspace overrides user overrides built-in defaults):
+#   - <workspace_root>/gradle-analyzer.toml   (workspace-local, highest precedence)
+#   - $XDG_CONFIG_HOME/gradle-analyzer/gradle-analyzer.toml  (user-level)
+#   - $HOME/.config/gradle-analyzer/gradle-analyzer.toml     (user-level fallback)
+#
+# Every key is optional; an absent file (or absent key) uses the built-in default
+# shown below. Unknown keys are rejected so typos surface as a parse error.
+
+[sidecar]
+# Hard timeout for a sidecar request (ms).
+request_timeout_ms = 30000
+# Deadline within which a model-dependent request returns pending/empty (ms).
+model_request_deadline_ms = 1500
+# Maximum concurrent sidecar processes per workspace.
+max_concurrent = 2
+
+[latency]
+# Target budget for static diagnostics (ms).
+static_diagnostics_ms = 200
+# Target budget for completion responses (ms).
+completion_ms = 150
+
+[features]
+enable_kotlin_dsl = true
+enable_groovy_dsl = true
+enable_sidecar = true
+
+[watcher]
+# Debounce window for config file changes (ms).
+debounce_ms = 250
+
+[transport]
+# Maximum accepted LSP message size (bytes).
+max_message_bytes = 16777216
