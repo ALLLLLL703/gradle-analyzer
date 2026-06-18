@@ -1,0 +1,10 @@
+rootProject.name = 'my-app'
+
+include ':app'
+include ':core', ':feature'
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+    }
+}

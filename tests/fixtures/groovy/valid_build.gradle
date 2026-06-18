@@ -1,0 +1,24 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.example'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+    google()
+}
+
+dependencies {
+    implementation 'org.apache.commons:commons-lang3:3.14.0'
+    testImplementation 'junit:junit:4.13.2'
+    implementation group: 'com.google.guava', name: 'guava', version: '33.0.0-jre'
+}
+
+task hello {
+    doLast {
+        println 'Hello, Gradle'
+    }
+}

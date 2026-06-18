@@ -1,0 +1,43 @@
+def projectName = 'demo'
+String descriptor = "build-${projectName}"
+final int retries = 3
+static def helper = null
+
+ext {
+    isCI = System.getenv('CI') != null
+}
+
+if (project.hasProperty('release')) {
+    version = '2.0.0'
+} else {
+    version = '2.0.0-SNAPSHOT'
+}
+
+for (module in ['app', 'core']) {
+    println "configuring ${module}"
+}
+
+def names = ['alpha', 'beta', 'gamma']
+names.each { name ->
+    println name
+}
+
+def pattern = ~/[a-z]+/
+if (descriptor =~ /build-.*/) {
+    println 'matched'
+}
+
+def settings = [group: 'org.example', version: '1.0', tags: ['a', 'b']]
+
+repositories {
+    mavenCentral()
+    maven {
+        url 'https://repo.example.com/releases'
+    }
+}
+
+dependencies {
+    implementation 'org.apache.commons:commons-lang3:3.14.0'
+    implementation libs.guava
+    testImplementation libs.junit.jupiter
+}

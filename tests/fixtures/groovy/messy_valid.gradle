@@ -1,0 +1,21 @@
+// messy but valid: blank lines, trailing commas, mixed quotes, inline comments
+
+
+plugins   {
+    id   'java'      // the java plugin
+    id "groovy"
+}
+
+
+repositories{mavenCentral()
+    google( )
+}
+
+dependencies {
+    implementation(  'org.apache.commons:commons-lang3:3.14.0'  )
+    implementation group: 'com.google.guava' , name: 'guava' , version: '33.0.0-jre'
+    testImplementation 'junit:junit:4.13.2',
+        'org.mockito:mockito-core:5.0.0'
+}
+
+apply plugin: 'maven-publish'
