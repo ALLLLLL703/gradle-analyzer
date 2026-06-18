@@ -67,6 +67,10 @@ pub struct FeatureToggles {
     pub enable_groovy_dsl: bool,
     /// Enable the advanced (sidecar-backed) tier.
     pub enable_sidecar: bool,
+    /// Enable safe, reversible local code actions.
+    pub enable_code_actions: bool,
+    /// Enable static hover from local facts.
+    pub enable_hover: bool,
 }
 
 /// File-watcher and hot-reload tuning.
@@ -106,6 +110,8 @@ impl Default for GradleAnalyzerConfig {
                 enable_kotlin_dsl: true,
                 enable_groovy_dsl: true,
                 enable_sidecar: true,
+                enable_code_actions: true,
+                enable_hover: true,
             },
             watcher: WatcherConfig { debounce_ms: 250 },
             transport: TransportConfig {

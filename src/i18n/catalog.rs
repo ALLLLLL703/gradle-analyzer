@@ -59,6 +59,9 @@ pub fn english_template(key: MessageKey) -> Option<&'static str> {
         MessageKey::SidecarStaleCache => {
             "Cached Gradle model is stale; advanced model unavailable until refresh, static analysis continues."
         }
+        MessageKey::SidecarModelImported => {
+            "Imported Gradle {0} project model ({1} plugins, {2} extensions)."
+        }
         MessageKey::SyntaxMissingEquals => "Missing '=' in assignment.",
         MessageKey::SyntaxKeywordTypo => "'{0}' looks like a misspelled keyword.",
         MessageKey::SyntaxUnclosedBlock => "Block opened here is never closed.",
@@ -97,6 +100,27 @@ pub fn english_template(key: MessageKey) -> Option<&'static str> {
         MessageKey::CompletionDetailTaskName => "Gradle task",
         MessageKey::CompletionDetailProjectPath => "Project dependency",
         MessageKey::CompletionDetailImportHint => "Import",
+        MessageKey::CodeActionRemoveDuplicate => "Remove duplicate declaration of '{0}'",
+        MessageKey::CodeActionInsertClosingBrace => "Insert missing closing brace",
+        MessageKey::CodeActionRemoveUnusedImport => "Remove unused import '{0}'",
+        MessageKey::CodeActionModernizeConfiguration => {
+            "Replace deprecated configuration '{0}' with '{1}'"
+        }
+        MessageKey::HoverDependency => "Dependency: {0} {1}",
+        MessageKey::HoverTask => "Gradle task '{0}'",
+        MessageKey::HoverPlugin => "Gradle plugin '{0}'",
+        MessageKey::HoverBlockPlugins => {
+            "`plugins` block: declares the Gradle plugins applied to this project."
+        }
+        MessageKey::HoverBlockDependencies => {
+            "`dependencies` block: declares the dependencies of this project's configurations."
+        }
+        MessageKey::HoverBlockRepositories => {
+            "`repositories` block: declares the artifact repositories dependencies resolve from."
+        }
+        MessageKey::HoverBlockTasks => {
+            "`tasks` block: registers and configures this project's Gradle tasks."
+        }
         MessageKey::UntranslatedProbe => return None,
     };
     Some(template)

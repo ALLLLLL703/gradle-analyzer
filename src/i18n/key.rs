@@ -62,6 +62,8 @@ pub enum MessageKey {
     SidecarCanceled,
     /// The cached sidecar model is stale and was rejected.
     SidecarStaleCache,
+    /// The Gradle model was successfully imported by the sidecar.
+    SidecarModelImported,
 
     // --- Syntax diagnostics (rendered by the Task 9 diagnostics layer) ---
     // Each maps 1:1 to a `crate::gradle::syntax::SyntaxErrorKind` variant so the tolerant
@@ -132,6 +134,36 @@ pub enum MessageKey {
     /// Detail for a safe `import` hint candidate.
     CompletionDetailImportHint,
 
+    // --- Code-action titles (rendered by the Task 13 code-actions feature) ---
+    // Each labels a whitelisted, reversible local fix offered only when its exact
+    // precondition holds; the title is user-facing and so flows through a key.
+    /// Title: remove a duplicate unique declaration.
+    CodeActionRemoveDuplicate,
+    /// Title: insert the single missing closing brace.
+    CodeActionInsertClosingBrace,
+    /// Title: remove an unused import line.
+    CodeActionRemoveUnusedImport,
+    /// Title: normalize a deprecated, 1:1-renamed dependency configuration.
+    CodeActionModernizeConfiguration,
+
+    // --- Static hover content (rendered by the Task 13 hover feature) ---
+    // Block-keyword purpose and per-fact summaries from LOCAL facts only; catalog-accessor
+    // hover reuses the `SemanticCatalog*` keys above rather than adding new ones.
+    /// Hover: a dependency declaration (`{0}` configuration, `{1}` coordinate).
+    HoverDependency,
+    /// Hover: a task declaration (`{0}` task name).
+    HoverTask,
+    /// Hover: a plugin application (`{0}` plugin id).
+    HoverPlugin,
+    /// Hover: the `plugins { }` block purpose.
+    HoverBlockPlugins,
+    /// Hover: the `dependencies { }` block purpose.
+    HoverBlockDependencies,
+    /// Hover: the `repositories { }` block purpose.
+    HoverBlockRepositories,
+    /// Hover: the `tasks { }` block purpose.
+    HoverBlockTasks,
+
     /// Reserved key intentionally absent from the catalog.
     ///
     /// It models a key added to the enum before its catalog entry exists, and lets
@@ -163,6 +195,7 @@ impl MessageKey {
             MessageKey::SidecarSchemaMismatch => "sidecar.schema_mismatch",
             MessageKey::SidecarCanceled => "sidecar.canceled",
             MessageKey::SidecarStaleCache => "sidecar.stale_cache",
+            MessageKey::SidecarModelImported => "sidecar.model_imported",
             MessageKey::SyntaxMissingEquals => "syntax.missing_equals",
             MessageKey::SyntaxKeywordTypo => "syntax.keyword_typo",
             MessageKey::SyntaxUnclosedBlock => "syntax.unclosed_block",
@@ -187,6 +220,17 @@ impl MessageKey {
             MessageKey::CompletionDetailTaskName => "completion.detail.task_name",
             MessageKey::CompletionDetailProjectPath => "completion.detail.project_path",
             MessageKey::CompletionDetailImportHint => "completion.detail.import_hint",
+            MessageKey::CodeActionRemoveDuplicate => "code_action.remove_duplicate",
+            MessageKey::CodeActionInsertClosingBrace => "code_action.insert_closing_brace",
+            MessageKey::CodeActionRemoveUnusedImport => "code_action.remove_unused_import",
+            MessageKey::CodeActionModernizeConfiguration => "code_action.modernize_configuration",
+            MessageKey::HoverDependency => "hover.dependency",
+            MessageKey::HoverTask => "hover.task",
+            MessageKey::HoverPlugin => "hover.plugin",
+            MessageKey::HoverBlockPlugins => "hover.block.plugins",
+            MessageKey::HoverBlockDependencies => "hover.block.dependencies",
+            MessageKey::HoverBlockRepositories => "hover.block.repositories",
+            MessageKey::HoverBlockTasks => "hover.block.tasks",
             MessageKey::UntranslatedProbe => "diag.untranslated_probe",
         }
     }

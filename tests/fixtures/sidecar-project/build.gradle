@@ -1,0 +1,11 @@
+// Applies ONLY the built-in `java` plugin so a real Tooling-API sync needs no network:
+// it contributes the `java` extension (JavaPluginExtension) and standard task types the
+// sidecar model walk asserts on.
+plugins {
+    id 'java'
+}
+
+group = 'com.example.sidecar'
+version = '0.1.0'
+
+// No external dependencies -> no repository access -> offline-safe.

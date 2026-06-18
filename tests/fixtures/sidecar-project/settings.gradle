@@ -1,0 +1,3 @@
+// Minimal single-module fixture for the Task 14 real-sync test.
+// No network access: only the built-in `java` plugin is applied (see build.gradle).
+rootProject.name = 'sidecar-fixture'

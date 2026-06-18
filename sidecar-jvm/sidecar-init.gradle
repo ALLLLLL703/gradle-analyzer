@@ -1,0 +1,151 @@
+// sidecar-init.gradle — Gradle init-script that walks the evaluated project model and
+// serializes the EXACT camelCase SidecarModel contract (Rust src/gradle/sidecar/model.rs)
+// to the file named by -Pga_sidecar_out=<path>.
+//
+// Run by the GradleModelSidecar launcher via `--init-script`. It hooks projectsEvaluated so
+// every project is configured before the walk (applied plugins, extension DSL blocks, task
+// types, the buildscript classpath + sibling -sources.jar, and gradle/libs.versions.toml).
+// Reflection-based discovery only; no extra dependencies (groovy.json.JsonOutput ships with
+// Gradle). Every per-element probe is guarded so a hostile/odd build degrades to a partial
+// model instead of aborting the sync.
+
+import groovy.json.JsonOutput
+
+gradle.projectsEvaluated { g ->
+    def outPath = g.startParameter.projectProperties['ga_sidecar_out']
+    if (!outPath) {
+        return
+    }
+
+    def root = g.rootProject
+    def appliedPlugins = [] as List
+    def extensions = [] as List
+    def taskTypes = [] as List
+    def classpathJars = [] as LinkedHashSet
+    def sourceJars = [] as LinkedHashSet
+    def seenPluginClasses = [] as HashSet
+
+    root.allprojects { project ->
+        collectPlugins(project, appliedPlugins, seenPluginClasses)
+        collectExtensions(project, extensions)
+        collectTaskTypes(project, taskTypes)
+        collectClasspath(project, classpathJars, sourceJars)
+    }
+
+    def model = [
+        gradleVersion : g.gradleVersion,
+        appliedPlugins: appliedPlugins,
+        extensions    : extensions,
+        taskTypes     : taskTypes,
+        classpathJars : classpathJars.toList(),
+        sourceJars    : sourceJars.toList(),
+        versionCatalog: readVersionCatalog(root)
+    ]
+
+    new File(outPath).text = JsonOutput.toJson(model)
+}
+
+// Applied plugins by implementing class (deduplicated across projects).
+def collectPlugins(project, List out, Set seen) {
+    try {
+        project.plugins.each { plugin ->
+            def cls = plugin.getClass().getName()
+            if (seen.add(cls)) {
+                out << [id: '', pluginClass: cls]
+            }
+        }
+    } catch (Throwable ignored) {
+    }
+}
+
+// Extension DSL blocks (e.g. `java {}`, `dotnet {}`): name + public concrete type fqn.
+def collectExtensions(project, List out) {
+    try {
+        project.extensions.extensionsSchema.elements.each { schema ->
+            try {
+                def name = schema.name
+                def type = schema.publicType.concreteClass.name
+                if (!out.any { it.name == name && it.typeFqn == type }) {
+                    out << [name: name, typeFqn: type]
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+    } catch (Throwable ignored) {
+    }
+}
+
+// Task types: each task's name + its concrete implementation class fqn.
+def collectTaskTypes(project, List out) {
+    try {
+        project.tasks.each { task ->
+            try {
+                def name = task.name
+                def type = task.getClass().getName()
+                out << [name: name, typeFqn: type]
+            } catch (Throwable ignored) {
+            }
+        }
+    } catch (Throwable ignored) {
+    }
+}
+
+// Resolved buildscript classpath jars + any sibling `-sources.jar` for navigation.
+def collectClasspath(project, Set jars, Set sources) {
+    try {
+        def config = project.buildscript.configurations.findByName('classpath')
+        if (config == null) {
+            return
+        }
+        config.resolve().each { file ->
+            def path = file.absolutePath
+            jars << path
+            if (path.endsWith('.jar')) {
+                def sibling = new File(path[0..-5] + '-sources.jar')
+                if (sibling.exists()) {
+                    sources << sibling.absolutePath
+                }
+            }
+        }
+    } catch (Throwable ignored) {
+    }
+}
+
+// Best-effort version-catalog read from gradle/libs.versions.toml (line-shaped, no TOML dep).
+def readVersionCatalog(root) {
+    def catalog = [libraries: [:], bundles: [:], versions: [:], plugins: [:]]
+    try {
+        def file = new File(root.projectDir, 'gradle/libs.versions.toml')
+        if (!file.exists()) {
+            return catalog
+        }
+        def section = null
+        file.eachLine { raw ->
+            def line = raw.trim()
+            if (line.isEmpty() || line.startsWith('#')) {
+                return
+            }
+            if (line.startsWith('[') && line.endsWith(']')) {
+                section = line[1..-2]
+                return
+            }
+            def eq = line.indexOf('=')
+            if (eq <= 0 || section == null) {
+                return
+            }
+            def key = line[0..<eq].trim()
+            def value = line[(eq + 1)..-1].trim()
+            if (section == 'versions') {
+                catalog.versions[key] = value.replaceAll('"', '')
+            } else if (section == 'libraries') {
+                catalog.libraries[key] = value
+            } else if (section == 'plugins') {
+                catalog.plugins[key] = value
+            } else if (section == 'bundles') {
+                catalog.bundles[key] = value
+            }
+        }
+    } catch (Throwable ignored) {
+    }
+    return catalog
+}

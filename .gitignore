@@ -5,3 +5,6 @@
 /AGENTS.md
 /review
 /style.md
+
+# gradle daemon caches in fixtures
+**/.gradle/

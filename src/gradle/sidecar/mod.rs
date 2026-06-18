@@ -23,6 +23,19 @@
 //!   round-trip over any [`runner::ProcessRunner`], enforcing the config-backed timeout and
 //!   always degrading to the static tier — never panicking.
 //!
+//! Task 14 adds the REAL runner on top of this same contract:
+//!
+//! - [`launch`]: pure [`launch::plan_launch`] that validates the JVM / wrapper / installation
+//!   / compiled classes and builds the `java` argv (each gap → a typed [`failure::SidecarFailure`]).
+//! - [`wrapper_runner`]: the production [`wrapper_runner::WrapperRunner`], a tokio child
+//!   process speaking the framed protocol over stdio (the Gradle daemon's stderr is inherited
+//!   so it never pollutes the stdout protocol channel).
+//! - [`cache`]: a [`cache::ModelCache`] keyed by Gradle version + classpath fingerprint, so a
+//!   prior import is reused while fresh and a changed key degrades to
+//!   [`failure::SidecarFailure::StaleCache`].
+//! - [`service`]: the [`service::SidecarService`] that acquires a `max_concurrent` permit,
+//!   plans + launches the sidecar, drives the client (timeout + cancel), and caches the model.
+//!
 //! # Example
 //!
 //! ```
@@ -47,14 +60,20 @@
 //! # }
 //! ```
 
+pub mod cache;
 pub mod client;
 pub mod failure;
 pub mod framing;
+pub mod launch;
 pub mod model;
 pub mod protocol;
 pub mod runner;
+pub mod service;
+pub mod wrapper_runner;
 
 pub use client::SidecarClient;
 pub use failure::SidecarFailure;
 pub use model::SidecarModel;
 pub use runner::{FakeRunner, ProcessRunner, RunnerError};
+pub use service::SidecarService;
+pub use wrapper_runner::{CommandSpec, WrapperRunner};

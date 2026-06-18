@@ -6,8 +6,10 @@
 //! so later work attaches without restructuring.
 
 pub mod parser;
+pub mod code_actions;
 pub mod completion;
 pub mod diagnostics;
+pub mod hover;
 pub mod navigation;
 pub mod semantic;
 pub mod sidecar;

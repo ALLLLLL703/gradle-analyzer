@@ -9,21 +9,30 @@
 //! not feature output.
 
 use tower_lsp::lsp_types::{
+    CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, CodeActionResponse,
     CompletionItem, CompletionItemKind, CompletionParams, CompletionResponse,
     Diagnostic as LspDiagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentSymbolParams,
-    DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
-    InitializeParams, InitializeResult, InitializedParams, InsertTextFormat, Location,
-    MessageType, Position, Range, ReferenceParams, ServerInfo, Url,
+    DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverContents,
+    HoverParams, InitializeParams, InitializeResult, InitializedParams, InsertTextFormat,
+    Location, MarkupContent, MarkupKind, MessageType, Position, Range, ReferenceParams,
+    ServerInfo, TextEdit, Url, WorkspaceEdit,
 };
 use tower_lsp::{Client, LanguageServer, jsonrpc::Result};
 
+use std::collections::HashMap;
+
 use crate::config::ConfigManager;
+use crate::gradle::code_actions::{
+    CodeActionCategory, CodeActionModel, SpanEdit, code_actions,
+};
 use crate::gradle::completion::{self, Candidate, CandidateKind, CompletionServices};
 use crate::gradle::diagnostics::{Diagnostic, Severity, compute_diagnostics};
-use crate::gradle::navigation::lsp::{NavQuery, navigate};
+use crate::gradle::hover::{HoverModel, hover};
+use crate::gradle::navigation::lsp::{NavQuery, navigate, position_to_offset, span_to_range};
 use crate::gradle::parser::{parse_groovy, parse_kotlin};
-use crate::gradle::semantic::{SemanticInput, analyze_documents};
+use crate::gradle::semantic::{SemanticGraph, SemanticInput, analyze_documents};
+use crate::gradle::syntax::{Parse, TextSpan};
 use crate::gradle::workspace::{DslLanguage, TrackedDocument};
 use crate::i18n::{MessageKey, Translator};
 use crate::lsp::capabilities::server_capabilities;
@@ -155,6 +164,82 @@ impl GradleLanguageServer {
             .into_iter()
             .map(to_completion_item)
             .collect()
+    }
+
+    /// Parses `doc` and builds the catalog-aware semantic graph used by hover/code actions.
+    ///
+    /// Mirrors the completion boundary: parses for the document's DSL and analyzes the
+    /// document plus any on-disk version catalog so `libs.*` accessors resolve. Returns the
+    /// parse and the graph; the caller looks up this document's facts by file-name id.
+    fn parse_and_graph(&self, doc: &TrackedDocument) -> (Parse, SemanticGraph) {
+        let text = doc.text();
+        let parse = match doc.kind().dsl() {
+            Some(DslLanguage::Kotlin) => parse_kotlin(text),
+            _ => parse_groovy(text),
+        };
+        let inputs = completion::workspace_inputs(doc);
+        let graph = analyze_documents(&inputs);
+        (parse, graph)
+    }
+
+    /// Computes the code-action models for `doc` over the requested byte range.
+    ///
+    /// Builds the graph, looks up this document's facts, computes diagnostics from the same
+    /// graph, and runs the LSP-free [`code_actions`] core. Conversion to protocol types
+    /// happens at the call site (`code_action`).
+    fn code_action_models(&self, doc: &TrackedDocument, range: TextSpan) -> Vec<CodeActionModel> {
+        let (parse, graph) = self.parse_and_graph(doc);
+        let document_id = crate::gradle::code_actions::document_id_for(doc);
+        let diagnostics = match graph.document(&document_id) {
+            Some(semantics) => compute_diagnostics(doc, &parse, semantics),
+            None => Vec::new(),
+        };
+        code_actions(doc, &parse, &graph, &diagnostics, range)
+    }
+
+    /// Computes the static hover model for `doc` at `offset`, if any.
+    fn hover_model(&self, doc: &TrackedDocument, offset: usize) -> Option<HoverModel> {
+        let (parse, graph) = self.parse_and_graph(doc);
+        hover(doc, &parse, &graph, offset)
+    }
+
+    /// Renders a [`HoverModel`] to a protocol [`Hover`] (plain-text markup) at the boundary.
+    fn to_hover(&self, model: &HoverModel, text: &str) -> Hover {
+        let args: Vec<&str> = model.args.iter().map(String::as_str).collect();
+        let value = self.translator.get_text(model.message_key, &args);
+        Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::PlainText,
+                value,
+            }),
+            range: Some(span_to_range(text, model.span)),
+        }
+    }
+
+    /// Renders a [`CodeActionModel`] to a protocol [`CodeActionOrCommand`] at the boundary.
+    ///
+    /// Builds a `WorkspaceEdit` of `TextEdit`s over `uri` from the model's span edits and
+    /// renders the localized title through the translator.
+    fn to_code_action(
+        &self,
+        model: CodeActionModel,
+        uri: &Url,
+        text: &str,
+    ) -> CodeActionOrCommand {
+        let args: Vec<&str> = model.title_args.iter().map(String::as_str).collect();
+        let title = self.translator.get_text(model.title_key, &args);
+        let edits = model.edits.iter().map(|edit| to_text_edit(edit, text)).collect();
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), edits);
+        CodeActionOrCommand::CodeAction(CodeAction {
+            title,
+            kind: Some(to_code_action_kind(model.category)),
+            edit: Some(WorkspaceEdit {
+                changes: Some(changes),
+                ..WorkspaceEdit::default()
+            }),
+            ..CodeAction::default()
+        })
     }
 }
 
@@ -313,17 +398,63 @@ impl LanguageServer for GradleLanguageServer {
         Ok(Some(locations))
     }
 
-    async fn hover(&self, _params: HoverParams) -> Result<Option<Hover>> {
-        // Feature body: later task.
-        Ok(None)
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        // Static tier (Task 13): localized hover from local facts, behind the dispatch gate.
+        // Gated on the `enable_hover` toggle; conversion to protocol types at this boundary.
+        if !self.config.snapshot().features.enable_hover {
+            return Ok(None);
+        }
+        let position = params.text_document_position_params.position;
+        let uri = params.text_document_position_params.text_document.uri;
+        let Some(generation) = self.lifecycle.current_generation(&uri).await else {
+            return Ok(None);
+        };
+        let token = self.lifecycle.token_for(uri.clone(), generation);
+        let model = run_if_current(&self.lifecycle, &token, async {
+            let doc = self.lifecycle.snapshot(&uri).await?;
+            let offset = position_to_offset(doc.text(), position)?;
+            self.hover_model(&doc, offset)
+                .map(|model| (model, doc.text_arc()))
+        })
+        .await
+        .flatten();
+        Ok(model.map(|(model, text)| self.to_hover(&model, &text)))
     }
 
     async fn code_action(
         &self,
-        _params: tower_lsp::lsp_types::CodeActionParams,
-    ) -> Result<Option<tower_lsp::lsp_types::CodeActionResponse>> {
-        // Feature body: Task 13.
-        Ok(None)
+        params: CodeActionParams,
+    ) -> Result<Option<CodeActionResponse>> {
+        // Static tier (Task 13): a narrow whitelist of safe local fixes, behind the gate.
+        // Gated on `enable_code_actions`; conversion to protocol CodeActions at this boundary.
+        if !self.config.snapshot().features.enable_code_actions {
+            return Ok(None);
+        }
+        let uri = params.text_document.uri;
+        let lsp_range = params.range;
+        let Some(generation) = self.lifecycle.current_generation(&uri).await else {
+            return Ok(None);
+        };
+        let token = self.lifecycle.token_for(uri.clone(), generation);
+        let result = run_if_current(&self.lifecycle, &token, async {
+            let doc = self.lifecycle.snapshot(&uri).await?;
+            let range = lsp_range_to_span(doc.text(), lsp_range)?;
+            let models = self.code_action_models(&doc, range);
+            Some((models, doc.text_arc()))
+        })
+        .await
+        .flatten();
+        let Some((models, text)) = result else {
+            return Ok(None);
+        };
+        if models.is_empty() {
+            return Ok(None);
+        }
+        let actions = models
+            .into_iter()
+            .map(|model| self.to_code_action(model, &uri, &text))
+            .collect();
+        Ok(Some(actions))
     }
 }
 
@@ -344,6 +475,32 @@ fn to_severity(severity: Severity) -> DiagnosticSeverity {
         Severity::Warning => DiagnosticSeverity::WARNING,
         Severity::Information => DiagnosticSeverity::INFORMATION,
         Severity::Hint => DiagnosticSeverity::HINT,
+    }
+}
+
+/// Converts an LSP [`Range`] to a byte [`TextSpan`] over `text`, if both ends resolve.
+///
+/// Returns `None` when either position is past the end of the document, so an out-of-range
+/// code-action request simply yields no actions rather than a panic.
+fn lsp_range_to_span(text: &str, range: Range) -> Option<TextSpan> {
+    let start = position_to_offset(text, range.start)?;
+    let end = position_to_offset(text, range.end)?;
+    Some(TextSpan::from_range(start.min(end), start.max(end)))
+}
+
+/// Converts a code-action [`SpanEdit`] to a protocol [`TextEdit`] over `text`.
+fn to_text_edit(edit: &SpanEdit, text: &str) -> TextEdit {
+    TextEdit {
+        range: span_to_range(text, edit.span),
+        new_text: edit.new_text.clone(),
+    }
+}
+
+/// Maps a [`CodeActionCategory`] to the closest protocol [`CodeActionKind`].
+fn to_code_action_kind(category: CodeActionCategory) -> CodeActionKind {
+    match category {
+        CodeActionCategory::QuickFix => CodeActionKind::QUICKFIX,
+        CodeActionCategory::Rewrite => CodeActionKind::REFACTOR_REWRITE,
     }
 }
 

@@ -75,6 +75,10 @@ pub struct RawFeatures {
     pub enable_groovy_dsl: Option<bool>,
     /// See [`FeatureToggles::enable_sidecar`].
     pub enable_sidecar: Option<bool>,
+    /// See [`FeatureToggles::enable_code_actions`].
+    pub enable_code_actions: Option<bool>,
+    /// See [`FeatureToggles::enable_hover`].
+    pub enable_hover: Option<bool>,
 }
 
 /// Raw watcher section.
@@ -139,6 +143,11 @@ impl RawConfig {
                     .features
                     .enable_sidecar
                     .or(self.features.enable_sidecar),
+                enable_code_actions: higher
+                    .features
+                    .enable_code_actions
+                    .or(self.features.enable_code_actions),
+                enable_hover: higher.features.enable_hover.or(self.features.enable_hover),
             },
             watcher: RawWatcher {
                 debounce_ms: higher.watcher.debounce_ms.or(self.watcher.debounce_ms),
@@ -199,6 +208,14 @@ impl RawConfig {
                     .features
                     .enable_sidecar
                     .unwrap_or(defaults.features.enable_sidecar),
+                enable_code_actions: self
+                    .features
+                    .enable_code_actions
+                    .unwrap_or(defaults.features.enable_code_actions),
+                enable_hover: self
+                    .features
+                    .enable_hover
+                    .unwrap_or(defaults.features.enable_hover),
             },
             watcher: WatcherConfig {
                 debounce_ms: self
