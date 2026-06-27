@@ -1,3 +1,5 @@
+pub mod context;
+
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -6,9 +8,10 @@ use std::{
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use crate::{
-    config::manager::ConfigManager,
+    config::{manager::ConfigManager, model::RuntimeConfig},
     document::findkind::GradleFileKind,
     i18n::LangHelper,
+    services::diagnostics::context::AnalysisContext,
 };
 
 #[derive(Clone)]
@@ -36,10 +39,12 @@ impl DiagnosticsService {
     pub async fn publish_placeholder_diagnostic(
         &self,
         client: &tower_lsp::Client,
-        uri: &Url,
-        text: &str,
+        context: &AnalysisContext,
     ) {
-        let runtime_config = self.config.get_config().await;
+        let runtime_config: RuntimeConfig = self.config.get_config().await;
+        let uri: Url = context.snapshot.uri.clone();
+        let text: &str = &context.snapshot.text;
+
         if !runtime_config.lsp.enable_placeholder_diagnostics {
             client.publish_diagnostics(uri.clone(), vec![], None).await;
             return;

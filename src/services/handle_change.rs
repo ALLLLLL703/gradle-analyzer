@@ -2,7 +2,8 @@ use tower_lsp::lsp_types::DidChangeTextDocumentParams;
 
 use crate::{
     document::DocumentSnapshot,
-    services::Backend,
+    services::{Backend, diagnostics::context::AnalysisContext},
+    workspace::WorkspaceFileRole,
 };
 
 impl Backend {
@@ -27,7 +28,28 @@ impl Backend {
             workspace_root,
         };
 
+        let workspace_role = snapshot
+            .workspace_root
+            .as_ref()
+            .map(|root| {
+                self.runtime.workspace.classify_workspace_role(
+                    std::path::Path::new(uri.path()),
+                    root,
+                    snapshot.kind.clone(),
+                )
+            })
+            .unwrap_or(WorkspaceFileRole::Unknown);
+
+        let context = AnalysisContext {
+            snapshot: snapshot.clone(),
+            workspace_role,
+        };
+
         self.runtime.documents.update(&uri, snapshot).await;
+        self.runtime
+            .diagnostics
+            .publish_placeholder_diagnostic(&self.client, &context)
+            .await;
         self.client
             .log_message(
                 tower_lsp::lsp_types::MessageType::INFO,

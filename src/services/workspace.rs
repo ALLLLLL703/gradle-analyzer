@@ -34,7 +34,11 @@ impl WorkspaceService {
     }
 
     pub fn find_workspace_root(&self, path: &Path) -> Option<WorkspaceRoot> {
-        let max_depth = self.config.current_config_or_default().gradle.root_scan_detph;
+        let max_depth = self
+            .config
+            .current_config_or_default()
+            .gradle
+            .root_scan_detph;
 
         let mut current = if path.is_dir() { path } else { path.parent()? };
 

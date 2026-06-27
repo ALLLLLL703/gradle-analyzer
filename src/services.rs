@@ -115,28 +115,9 @@ impl LanguageServer for Backend {
 
     async fn did_open(&self, para: DidOpenTextDocumentParams) {
         self.handle_open(para.clone()).await;
-        self.runtime
-            .diagnostics
-            .publish_placeholder_diagnostic(
-                &self.client,
-                &para.text_document.uri,
-                &para.text_document.text,
-            )
-            .await;
     }
 
     async fn did_change(&self, para: DidChangeTextDocumentParams) {
-        let changed_text = para
-            .content_changes
-            .first()
-            .map(|change| change.text.clone())
-            .unwrap_or_default();
-
-        self.runtime
-            .diagnostics
-            .publish_placeholder_diagnostic(&self.client, &para.text_document.uri, &changed_text)
-            .await;
-
         self.handle_change(para).await;
     }
 
